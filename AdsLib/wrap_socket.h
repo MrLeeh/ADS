@@ -25,7 +25,7 @@
 
 #include <cstdint>
 
-#if defined(__gnu_linux__) || defined(__linux__) || defined(__APPLE__)|| defined(__CYGWIN__)
+#if defined(__gnu_linux__) || defined(__linux__) || defined(__APPLE__) || defined(__CYGWIN__)
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
