@@ -8,8 +8,8 @@ static void NotifyCallback(const AmsAddr* pAddr, const AdsNotificationHeader* pN
 {
     const uint8_t* data = reinterpret_cast<const uint8_t*>(pNotification + 1);
     std::cout << std::setfill('0') <<
-        "NetId 0x" << pAddr->netId <<
-        "hUser 0x" << std::hex << hUser <<
+        "NetId: " << pAddr->netId <<
+        " hUser 0x" << std::hex << hUser <<
         " sample time: " << std::dec << pNotification->nTimeStamp <<
         " sample size: " << std::dec << pNotification->cbSampleSize <<
         " value:";
@@ -33,7 +33,7 @@ uint32_t getHandleByNameExample(std::ostream& out, long port, const AmsAddr& ser
                                                      handleName.c_str(),
                                                      nullptr);
     if (handleStatus) {
-        out << "Create handle for '" << handleName << "' failed with: 0x" << std::hex << handleStatus << '\n';
+        out << "Create handle for '" << handleName << "' failed with: " << std::dec << handleStatus << '\n';
     }
     return handle;
 }
@@ -44,6 +44,27 @@ void releaseHandleExample(std::ostream& out, long port, const AmsAddr& server, u
     if (releaseHandle) {
         out << "Release handle 0x" << std::hex << handle << "' failed with: 0x" << releaseHandle << '\n';
     }
+}
+
+uint32_t getSymbolSize(std::ostream& out, long port, const AmsAddr& server, const std::string handleName)
+{
+    AdsSymbolEntry symbolEntry;
+    uint32_t bytesRead;
+
+    const long status = AdsSyncReadWriteReqEx2(port,
+                                               &server,
+                                               ADSIGRP_SYM_INFOBYNAMEEX,
+                                               0,
+                                               sizeof(symbolEntry),
+                                               &symbolEntry,
+                                               handleName.size(),
+                                               handleName.c_str(),
+                                               &bytesRead);
+    if (status) {
+        throw std::runtime_error("Unable to determine symbol size, reading ADS symbol information failed with: " + std::to_string(
+                                     status));
+    }
+    return symbolEntry.size;
 }
 
 void notificationExample(std::ostream& out, long port, const AmsAddr& server)
@@ -138,26 +159,30 @@ void readExample(std::ostream& out, long port, const AmsAddr& server)
 
 void readByNameExample(std::ostream& out, long port, const AmsAddr& server)
 {
+    static const char handleName[] = "MAIN.byByte[4]";
     uint32_t bytesRead;
-    uint32_t buffer;
-    uint32_t handle;
 
     out << __FUNCTION__ << "():\n";
-    handle = getHandleByNameExample(out, port, server, "MAIN.byByte[4]");
-
+    const uint32_t handle = getHandleByNameExample(out, port, server, handleName);
+    const uint32_t bufferSize = getSymbolSize(out, port, server, handleName);
+    const auto buffer = std::unique_ptr<uint8_t>(new uint8_t[bufferSize]);
     for (size_t i = 0; i < 8; ++i) {
         const long status = AdsSyncReadReqEx2(port,
                                               &server,
                                               ADSIGRP_SYM_VALBYHND,
                                               handle,
-                                              sizeof(buffer),
-                                              &buffer,
+                                              bufferSize,
+                                              buffer.get(),
                                               &bytesRead);
         if (status) {
             out << "ADS read failed with: " << std::dec << status << '\n';
             return;
         }
-        out << "ADS read " << std::dec << bytesRead << " bytes, value: 0x" << std::hex << buffer << '\n';
+        out << "ADS read " << std::dec << bytesRead << " bytes:" << std::hex;
+        for (size_t i = 0; i < bytesRead; ++i) {
+            out << ' ' << (int)buffer.get()[i];
+        }
+        out << '\n';
     }
     releaseHandleExample(out, port, server, handle);
 }
@@ -180,9 +205,12 @@ void runExample(std::ostream& out)
     static const AmsNetId remoteNetId { 192, 168, 0, 231, 1, 1 };
     static const char remoteIpV4[] = "ads-server";
 
+    // uncomment and adjust if automatic AmsNetId deduction is not working as expected
+    //AdsSetLocalAddress({192, 168, 0, 1, 1, 1});
+
     // add local route to your EtherCAT Master
     if (AdsAddRoute(remoteNetId, remoteIpV4)) {
-        out << "Adding ADS route failed, did you specified valid addresses?\n";
+        out << "Adding ADS route failed, did you specify valid addresses?\n";
         return;
     }
 
@@ -214,5 +242,9 @@ void runExample(std::ostream& out)
 
 int main()
 {
-    runExample(std::cout);
+    try {
+        runExample(std::cout);
+    } catch (const std::runtime_error& ex) {
+        std::cout << ex.what() << '\n';
+    }
 }

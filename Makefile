@@ -9,11 +9,13 @@ CXX :=$(CROSS_COMPILE)$(CXX)
 CFLAGS += -std=c++11
 CFLAGS += -pedantic
 CFLAGS += -Wall
-CFLAGS += -fPIC
+CFLAGS += $(ci_cxx_flags)
+CPPFLAGS += -I AdsLib/
+CPPFLAGS += -I tools/
 
 SRC_DIR := AdsLib/
 OBJ_DIR := obj/
-
+ 
 # Automatically collect all .cpp files
 CPP_FILES := $(wildcard $(SRC_DIR)*.cpp)
 # Create list of corresponding .obj outputs

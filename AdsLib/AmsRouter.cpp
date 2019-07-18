@@ -1,5 +1,5 @@
 /**
-   Copyright (c) 2015 Beckhoff Automation GmbH & Co. KG
+   Copyright (c) 2015 - 2018 Beckhoff Automation GmbH & Co. KG
 
    Permission is hereby granted, free of charge, to any person obtaining a copy
    of this software and associated documentation files (the "Software"), to deal
@@ -167,6 +167,19 @@ std::map<IpV4, std::unique_ptr<AmsConnection> >::iterator AmsRouter::__GetConnec
     return connections.end();
 }
 
+long AmsRouter::AdsRequest(AmsRequest& request)
+{
+    if (request.bytesRead) {
+        *request.bytesRead = 0;
+    }
+
+    auto ads = GetConnection(request.destAddr.netId);
+    if (!ads) {
+        return GLOBALERR_MISSING_ROUTE;
+    }
+    return ads->AdsRequest(request, ports[request.port - Router::PORT_BASE].tmms);
+}
+
 long AmsRouter::AddNotification(AmsRequest& request, uint32_t* pNotification, std::shared_ptr<Notification> notify)
 {
     if (request.bytesRead) {
@@ -179,11 +192,11 @@ long AmsRouter::AddNotification(AmsRequest& request, uint32_t* pNotification, st
     }
 
     auto& port = ports[request.port - Router::PORT_BASE];
-    const long status = ads->AdsRequest<AoEResponseHeader>(request, port.tmms);
+    const long status = ads->AdsRequest(request, port.tmms);
     if (!status) {
         *pNotification = qFromLittleEndian<uint32_t>((uint8_t*)request.buffer);
-        const auto notifyId = ads->CreateNotifyMapping(*pNotification, notify);
-        port.AddNotification(notifyId);
+        auto dispatcher = ads->CreateNotifyMapping(*pNotification, notify);
+        port.AddNotification(request.destAddr, *pNotification, dispatcher);
     }
     return status;
 }
